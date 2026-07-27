@@ -1,0 +1,120 @@
+import sqlite3
+
+class Student:
+    def __init__(self, roll, name, cgpa, skills, status):
+        self.roll = roll
+        self.name = name
+        self.cgpa = cgpa
+        self.skills = skills
+        self.status = status
+
+    def display(self):
+        print("Roll Number      :", self.roll)
+        print("Name             :", self.name)
+        print("CGPA             :", self.cgpa)
+        print("Skills           :", self.skills)
+        print("Placement Status :", self.status)
+        print("-" * 35)
+
+conn = sqlite3.connect("placement.db")
+cur = conn.cursor()
+
+cur.execute("""
+CREATE TABLE IF NOT EXISTS students(
+    roll INTEGER PRIMARY KEY,
+    name TEXT,
+    cgpa REAL,
+    skills TEXT,
+    status TEXT
+)
+""")
+
+cur.execute("SELECT COUNT(*) FROM students")
+count = cur.fetchone()[0]
+
+if count == 0:
+    data = [
+        (101, "Rahul", 8.5, "Python", "Not Placed"),
+        (102, "Anita", 7.2, "Java", "Not Placed"),
+        (103, "Rohan", 9.1, "C++", "Placed"),
+        (104, "Priya", 7.8, "SQL", "Not Placed"),
+        (105, "Kiran", 6.9, "JavaScript", "Not Placed")
+    ]
+
+    cur.executemany("INSERT INTO students VALUES(?,?,?,?,?)", data)
+    conn.commit()
+
+cur.execute("SELECT * FROM students")
+rows = cur.fetchall()
+
+students = []
+
+for row in rows:
+    students.append(Student(*row))
+
+import heapq
+
+heap = []
+
+for s in students:
+    heapq.heappush(heap, (s.cgpa, s))
+
+sorted_students = []
+
+while heap:
+    sorted_students.append(heapq.heappop(heap)[1])
+
+print("\nStudents Sorted by CGPA")
+print("-" * 35)
+
+for s in sorted_students:
+    s.display()
+
+students_by_roll = sorted(students, key=lambda x: x.roll)
+
+def binary_search(arr, key):
+    low = 0
+    high = len(arr) - 1
+
+    while low <= high:
+        mid = (low + high) // 2
+
+        if arr[mid].roll == key:
+            return arr[mid]
+        elif arr[mid].roll < key:
+            low = mid + 1
+        else:
+            high = mid - 1
+
+    return None
+
+roll = int(input("Enter Roll Number: "))
+
+student = binary_search(students_by_roll, roll)
+
+if student:
+    print("\nStudent Found")
+    student.display()
+else:
+    print("Student Not Found")
+
+print("\nStudents Eligible for Placement (CGPA > 7.5)")
+print("-" * 35)
+
+for s in students:
+    if s.cgpa > 7.5:
+        s.display()
+
+roll = int(input("Enter Roll Number to update status: "))
+new_status = input("Enter New Status (Placed/Not Placed): ")
+
+cur.execute(
+    "UPDATE students SET status=? WHERE roll=?",
+    (new_status, roll)
+)
+
+conn.commit()
+
+print("Placement Status Updated Successfully!")
+
+conn.close()

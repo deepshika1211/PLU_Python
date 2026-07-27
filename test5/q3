@@ -1,0 +1,113 @@
+import sqlite3
+
+class Transaction:
+    def __init__(self, tid, account, amount, date, ttype):
+        self.tid = tid
+        self.account = account
+        self.amount = amount
+        self.date = date
+        self.ttype = ttype
+
+    def display(self):
+        print("Transaction ID :", self.tid)
+        print("Account Number :", self.account)
+        print("Amount         :", self.amount)
+        print("Date           :", self.date)
+        print("Type           :", self.ttype)
+        print("-" * 30)
+
+conn = sqlite3.connect("bank.db")
+cur = conn.cursor()
+
+cur.execute("""
+CREATE TABLE IF NOT EXISTS transactions(
+    transaction_id INTEGER PRIMARY KEY,
+    account_number TEXT,
+    amount REAL,
+    date TEXT,
+    type TEXT
+)
+""")
+
+cur.execute("SELECT COUNT(*) FROM transactions")
+count = cur.fetchone()[0]
+
+if count == 0:
+    data = [
+        (101, "ACC1001", 5000, "2026-07-20", "Credit"),
+        (102, "ACC1002", 12000, "2026-07-21", "Debit"),
+        (103, "ACC1003", 8000, "2026-07-22", "Credit"),
+        (104, "ACC1004", 25000, "2026-07-23", "Credit"),
+        (105, "ACC1005", 3000, "2026-07-24", "Debit"),
+        (106, "ACC1006", 18000, "2026-07-25", "Credit"),
+        (107, "ACC1007", 7000, "2026-07-26", "Debit")
+    ]
+
+    cur.executemany("INSERT INTO transactions VALUES(?,?,?,?,?)", data)
+    conn.commit()
+
+cur.execute("SELECT * FROM transactions")
+rows = cur.fetchall()
+
+transactions = []
+
+for row in rows:
+    transactions.append(Transaction(*row))
+
+def quick_sort(arr):
+    if len(arr) <= 1:
+        return arr
+
+    pivot = arr[len(arr)//2].amount
+
+    left = [x for x in arr if x.amount < pivot]
+    middle = [x for x in arr if x.amount == pivot]
+    right = [x for x in arr if x.amount > pivot]
+
+    return quick_sort(left) + middle + quick_sort(right)
+
+sorted_transactions = quick_sort(transactions)
+
+print("Transactions Sorted by Amount")
+print("-" * 30)
+
+for t in sorted_transactions:
+    t.display()
+
+transactions_by_id = sorted(transactions, key=lambda x: x.tid)
+
+def binary_search(arr, key):
+    low = 0
+    high = len(arr) - 1
+
+    while low <= high:
+        mid = (low + high) // 2
+
+        if arr[mid].tid == key:
+            return arr[mid]
+        elif arr[mid].tid < key:
+            low = mid + 1
+        else:
+            high = mid - 1
+
+    return None
+
+tid = int(input("Enter Transaction ID: "))
+
+result = binary_search(transactions_by_id, tid)
+
+if result:
+    print("\nTransaction Found")
+    result.display()
+else:
+    print("Transaction Not Found")
+
+print("\nTop 5 Highest-Value Transactions")
+print("-" * 30)
+
+top5 = sorted_transactions[::-1][:5]
+
+for t in top5:
+    t.display()
+
+conn.close()

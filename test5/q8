@@ -1,0 +1,145 @@
+import heapq
+
+class Graph:
+    def __init__(self):
+        self.adj = {}
+
+    def add_edge(self, city_a, city_b, distance):
+        self.adj.setdefault(city_a, []).append((city_b, distance))
+        self.adj.setdefault(city_b, []).append((city_a, distance))
+
+    def shortest_distances(self, start_city):
+        distances = {start_city: 0}
+        queue = [(0, start_city)]
+
+        while queue:
+            current_distance, city = heapq.heappop(queue)
+            if current_distance > distances.get(city, float('inf')):
+                continue
+            for neighbor, weight in self.adj.get(city, []):
+                new_distance = current_distance + weight
+                if new_distance < distances.get(neighbor, float('inf')):
+                    distances[neighbor] = new_distance
+                    heapq.heappush(queue, (new_distance, neighbor))
+
+        return distances
+
+class Driver:
+    def __init__(self, driver_id, name, current_city, available=True):
+        self.driver_id = driver_id
+        self.name = name
+        self.current_city = current_city
+        self.available = available
+
+    def __repr__(self):
+        return f"Driver({self.driver_id}, {self.name}, {self.current_city}, available={self.available})"
+
+class Customer:
+    def __init__(self, customer_id, name, city):
+        self.customer_id = customer_id
+        self.name = name
+        self.city = city
+
+    def __repr__(self):
+        return f"Customer({self.customer_id}, {self.name}, {self.city})"
+
+class Booking:
+    def __init__(self, booking_id, driver, customer, pickup_city, dropoff_city):
+        self.booking_id = booking_id
+        self.driver = driver
+        self.customer = customer
+        self.pickup_city = pickup_city
+        self.dropoff_city = dropoff_city
+        self.status = "CONFIRMED"
+
+    def __repr__(self):
+        return (
+            f"Booking({self.booking_id}, driver={self.driver.name}, customer={self.customer.name}, "
+            f"pickup={self.pickup_city}, dropoff={self.dropoff_city}, status={self.status})"
+        )
+
+class RideBookingSystem:
+    def __init__(self):
+        self.graph = Graph()
+        self.drivers = []
+        self.customers = []
+        self.bookings = []
+        self.next_booking_id = 1
+
+    def add_driver(self, driver_id, name, city, available=True):
+        self.drivers.append(Driver(driver_id, name, city, available))
+
+    def add_customer(self, customer_id, name, city):
+        self.customers.append(Customer(customer_id, name, city))
+
+    def add_road(self, city_a, city_b, distance):
+        self.graph.add_edge(city_a, city_b, distance)
+
+    def fetch_available_drivers(self):
+        return [driver for driver in self.drivers if driver.available]
+
+    def find_nearest_available_driver(self, pickup_city):
+        distances = self.graph.shortest_distances(pickup_city)
+        available_drivers = self.fetch_available_drivers()
+        nearest_driver = None
+        nearest_distance = float('inf')
+
+        for driver in available_drivers:
+            driver_city = driver.current_city
+            if driver_city not in distances:
+                continue
+            if distances[driver_city] < nearest_distance:
+                nearest_distance = distances[driver_city]
+                nearest_driver = driver
+
+        return nearest_driver, nearest_distance if nearest_driver else (None, None)
+
+    def assign_booking(self, customer_id, dropoff_city):
+        customer = next((c for c in self.customers if c.customer_id == customer_id), None)
+        if not customer:
+            raise ValueError(f"Customer {customer_id} not found")
+
+        driver, distance = self.find_nearest_available_driver(customer.city)
+        if not driver:
+            raise RuntimeError("No available drivers")
+
+        booking = Booking(self.next_booking_id, driver, customer, customer.city, dropoff_city)
+        self.next_booking_id += 1
+        self.bookings.append(booking)
+        self.update_driver_availability(driver.driver_id, False)
+        return booking
+
+    def update_driver_availability(self, driver_id, available):
+        driver = next((d for d in self.drivers if d.driver_id == driver_id), None)
+        if driver:
+            driver.available = available
+        else:
+            raise ValueError(f"Driver {driver_id} not found")
+
+    def load_sample_data(self):
+        self.add_road('A', 'B', 5)
+        self.add_road('A', 'C', 8)
+        self.add_road('B', 'D', 3)
+        self.add_road('C', 'D', 4)
+        self.add_road('D', 'E', 6)
+
+        self.add_driver(1, 'Emma', 'A')
+        self.add_driver(2, 'Liam', 'C')
+        self.add_driver(3, 'Noah', 'E', available=False)
+
+        self.add_customer(101, 'Olivia', 'B')
+        self.add_customer(102, 'Ava', 'D')
+
+if __name__ == '__main__':
+    system = RideBookingSystem()
+    system.load_sample_data()
+
+    print('Available drivers:')
+    print(system.fetch_available_drivers())
+
+    booking = system.assign_booking(101, 'E')
+    print('Created booking:')
+    print(booking)
+
+    print('Driver availability after booking:')
+    print(system.fetch_available_drivers())

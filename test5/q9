@@ -1,0 +1,205 @@
+import datetime
+
+books = [
+    {"BookID": 101, "Title": "A Tale of Two Cities", "Author": "Charles Dickens", "Available": True},
+    {"BookID": 102, "Title": "Brave New World", "Author": "Aldous Huxley", "Available": True},
+    {"BookID": 103, "Title": "Catch-22", "Author": "Joseph Heller", "Available": True},
+    {"BookID": 104, "Title": "Don Quixote", "Author": "Miguel de Cervantes", "Available": False},
+    {"BookID": 105, "Title": "Ender\'s Game", "Author": "Orson Scott Card", "Available": True},
+]
+
+borrow_history = [
+    {
+        "BookID": 104,
+        "MemberID": 1,
+        "BorrowDate": datetime.date(2026, 7, 1),
+        "DueDate": datetime.date(2026, 7, 15),
+        "Returned": False,
+    }
+]
+
+members = [
+    {"MemberID": 1, "Name": "Alice"},
+    {"MemberID": 2, "Name": "Bob"},
+    {"MemberID": 3, "Name": "Carol"},
+]
+
+
+def merge_sort_books(book_list):
+    if len(book_list) <= 1:
+        return book_list
+    mid = len(book_list) // 2
+    left = merge_sort_books(book_list[:mid])
+    right = merge_sort_books(book_list[mid:])
+    return merge(left, right)
+
+
+def merge(left, right):
+    sorted_list = []
+    i = 0
+    j = 0
+    while i < len(left) and j < len(right):
+        if left[i]["Title"].lower() <= right[j]["Title"].lower():
+            sorted_list.append(left[i])
+            i += 1
+        else:
+            sorted_list.append(right[j])
+            j += 1
+    while i < len(left):
+        sorted_list.append(left[i])
+        i += 1
+    while j < len(right):
+        sorted_list.append(right[j])
+        j += 1
+    return sorted_list
+
+
+def display_books(book_list):
+    print("{:<8} {:<30} {:<20} {:<12}".format("BookID", "Title", "Author", "Available"))
+    print("-" * 72)
+    for book in book_list:
+        print("{:<8} {:<30} {:<20} {:<12}".format(
+            book["BookID"], book["Title"], book["Author"], "Yes" if book["Available"] else "No"
+        ))
+
+
+def sort_books_alphabetically():
+    sorted_books = merge_sort_books(books)
+    print("\nBooks sorted alphabetically by title:")
+    display_books(sorted_books)
+
+
+def binary_search_by_id(book_list, book_id):
+    sorted_by_id = sorted(book_list, key=lambda b: b["BookID"])
+    low = 0
+    high = len(sorted_by_id) - 1
+    while low <= high:
+        mid = (low + high) // 2
+        if sorted_by_id[mid]["BookID"] == book_id:
+            return sorted_by_id[mid]
+        if sorted_by_id[mid]["BookID"] < book_id:
+            low = mid + 1
+        else:
+            high = mid - 1
+    return None
+
+
+def search_book_by_id():
+    try:
+        book_id = int(input("Enter the Book ID to search: "))
+    except ValueError:
+        print("Invalid Book ID.")
+        return
+    book = binary_search_by_id(books, book_id)
+    if book:
+        print("Book found:")
+        display_books([book])
+    else:
+        print("Book ID not found.")
+
+
+def update_book_availability(book_id, available):
+    for book in books:
+        if book["BookID"] == book_id:
+            book["Available"] = available
+            return True
+    return False
+
+
+def borrow_book():
+    try:
+        book_id = int(input("Enter Book ID to borrow: "))
+        member_id = int(input("Enter Member ID: "))
+    except ValueError:
+        print("Invalid input. Book ID and Member ID must be numeric.")
+        return
+    book = next((b for b in books if b["BookID"] == book_id), None)
+    member = next((m for m in members if m["MemberID"] == member_id), None)
+    if book is None:
+        print("Book not found.")
+        return
+    if member is None:
+        print("Member not found.")
+        return
+    if not book["Available"]:
+        print("Book is not available for borrowing.")
+        return
+    book["Available"] = False
+    borrow_date = datetime.date.today()
+    due_date = borrow_date + datetime.timedelta(days=14)
+    borrow_history.append({
+        "BookID": book_id,
+        "MemberID": member_id,
+        "BorrowDate": borrow_date,
+        "DueDate": due_date,
+        "Returned": False,
+    })
+    print(f"Book '{book['Title']}' borrowed by {member['Name']}. Due date is {due_date}.")
+
+
+def display_available_books():
+    available_books = [book for book in books if book["Available"]]
+    if not available_books:
+        print("No available books.")
+        return
+    print("Available books:")
+    display_books(available_books)
+
+
+def display_overdue_books():
+    today = datetime.date.today()
+    overdue = [entry for entry in borrow_history if not entry["Returned"] and entry["DueDate"] < today]
+    if not overdue:
+        print("No overdue books.")
+        return
+    print("Overdue books:")
+    print("{:<8} {:<10} {:<12} {:<12} {:<12}".format("BookID", "MemberID", "BorrowDate", "DueDate", "Title"))
+    print("-" * 62)
+    for entry in overdue:
+        title = next((b["Title"] for b in books if b["BookID"] == entry["BookID"]), "Unknown")
+        print("{:<8} {:<10} {:<12} {:<12} {:<12}".format(
+            entry["BookID"], entry["MemberID"], entry["BorrowDate"].isoformat(), entry["DueDate"].isoformat(), title
+        ))
+
+
+def main_menu():
+    while True:
+        print("\nLibrary Book Borrowing System")
+        print("1. Display all available books")
+        print("2. Sort books alphabetically")
+        print("3. Search book by Book ID")
+        print("4. Borrow a book")
+        print("5. Update book availability")
+        print("6. Display overdue books")
+        print("7. Exit")
+        choice = input("Choose an option: ")
+        if choice == "1":
+            display_available_books()
+        elif choice == "2":
+            sort_books_alphabetically()
+        elif choice == "3":
+            search_book_by_id()
+        elif choice == "4":
+            borrow_book()
+        elif choice == "5":
+            try:
+                book_id = int(input("Enter Book ID to update: "))
+                avail_text = input("Set available? (yes/no): ").strip().lower()
+                available = avail_text in ["yes", "y"]
+                if update_book_availability(book_id, available):
+                    print("Book availability updated.")
+                else:
+                    print("Book ID not found.")
+            except ValueError:
+                print("Invalid Book ID.")
+        elif choice == "6":
+            display_overdue_books()
+        elif choice == "7":
+            print("Exiting.")
+            break
+        else:
+            print("Invalid option.")
+
+
+if __name__ == "__main__":
+    main_menu()

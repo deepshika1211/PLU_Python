@@ -1,0 +1,174 @@
+import sqlite3
+from typing import List, Dict, Optional
+import bisect
+
+class SalesPerformanceDashboard:
+    def __init__(self, db_name='sales.db'):
+        self.db_name = db_name
+        self.conn = None
+        self.cursor = None
+        self.initialize_db()
+    
+    def initialize_db(self):
+        """Initialize database and create tables."""
+        self.conn = sqlite3.connect(self.db_name)
+        self.cursor = self.conn.cursor()
+        
+        self.cursor.execute('''
+            CREATE TABLE IF NOT EXISTS sales (
+                sale_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                salesperson_id TEXT NOT NULL,
+                product TEXT NOT NULL,
+                region TEXT NOT NULL,
+                revenue REAL NOT NULL,
+                incentive_eligible BOOLEAN DEFAULT 0
+            )
+        ''')
+        self.conn.commit()
+    
+    def add_sale(self, salesperson_id: str, product: str, region: str, revenue: float):
+        """Add a sale record."""
+        self.cursor.execute('''
+            INSERT INTO sales (salesperson_id, product, region, revenue)
+            VALUES (?, ?, ?, ?)
+        ''', (salesperson_id, product, region, revenue))
+        self.conn.commit()
+    
+    def retrieve_all_sales(self) -> List[Dict]:
+        """Requirement 1: Retrieve all sales records."""
+        self.cursor.execute('SELECT * FROM sales')
+        columns = [description[0] for description in self.cursor.description]
+        records = [dict(zip(columns, row)) for row in self.cursor.fetchall()]
+        return records
+    
+    def sort_by_revenue(self, ascending: bool = False) -> List[Dict]:
+        """Requirement 2: Sort records based on revenue."""
+        order = 'ASC' if ascending else 'DESC'
+        self.cursor.execute(f'SELECT * FROM sales ORDER BY revenue {order}')
+        columns = [description[0] for description in self.cursor.description]
+        records = [dict(zip(columns, row)) for row in self.cursor.fetchall()]
+        return records
+    
+    def search_salesperson_binary(self, employee_id: str) -> List[Dict]:
+        """Requirement 3: Search a salesperson using Employee ID (Binary Search)."""
+        # Get all sales sorted by salesperson_id
+        self.cursor.execute('SELECT * FROM sales ORDER BY salesperson_id')
+        columns = [description[0] for description in self.cursor.description]
+        all_records = [dict(zip(columns, row)) for row in self.cursor.fetchall()]
+        
+        salesperson_ids = [r['salesperson_id'] for r in all_records]
+        
+        # Binary search
+        idx = bisect.bisect_left(salesperson_ids, employee_id)
+        
+        if idx < len(salesperson_ids) and salesperson_ids[idx] == employee_id:
+            return [r for r in all_records if r['salesperson_id'] == employee_id]
+        return []
+    
+    def get_top_5_salespersons(self) -> List[Dict]:
+        """Requirement 4: Display Top 5 salespersons by total revenue."""
+        self.cursor.execute('''
+            SELECT salesperson_id, SUM(revenue) as total_revenue, COUNT(*) as sales_count
+            FROM sales
+            GROUP BY salesperson_id
+            ORDER BY total_revenue DESC
+            LIMIT 5
+        ''')
+        columns = [description[0] for description in self.cursor.description]
+        records = [dict(zip(columns, row)) for row in self.cursor.fetchall()]
+        return records
+    
+    def find_highest_revenue_region(self) -> Optional[Dict]:
+        """Requirement 5: Find the highest revenue region."""
+        self.cursor.execute('''
+            SELECT region, SUM(revenue) as total_revenue
+            FROM sales
+            GROUP BY region
+            ORDER BY total_revenue DESC
+            LIMIT 1
+        ''')
+        columns = [description[0] for description in self.cursor.description]
+        result = self.cursor.fetchone()
+        if result:
+            return dict(zip(columns, result))
+        return None
+    
+    def update_incentive_status(self, revenue_threshold: float = 10000):
+        """Requirement 6: Update monthly incentive status for eligible salespersons."""
+        self.cursor.execute('''
+            UPDATE sales
+            SET incentive_eligible = 1
+            WHERE salesperson_id IN (
+                SELECT salesperson_id FROM sales
+                GROUP BY salesperson_id
+                HAVING SUM(revenue) >= ?
+            )
+        ''', (revenue_threshold,))
+        self.conn.commit()
+        return self.cursor.rowcount
+    
+    def get_incentive_eligible(self) -> List[Dict]:
+        """Get all salespersons eligible for incentive."""
+        self.cursor.execute('''
+            SELECT DISTINCT salesperson_id, SUM(revenue) as total_revenue
+            FROM sales
+            WHERE incentive_eligible = 1
+            GROUP BY salesperson_id
+        ''')
+        columns = [description[0] for description in self.cursor.description]
+        records = [dict(zip(columns, row)) for row in self.cursor.fetchall()]
+        return records
+    
+    def close(self):
+        """Close database connection."""
+        if self.conn:
+            self.conn.close()
+
+
+# Example Usage
+if __name__ == "__main__":
+    dashboard = SalesPerformanceDashboard()
+    
+    # Add sample data
+    sample_data = [
+        ("E001", "Laptop", "North", 5000),
+        ("E002", "Mouse", "South", 1500),
+        ("E001", "Keyboard", "North", 3000),
+        ("E003", "Monitor", "East", 4500),
+        ("E002", "Laptop", "South", 5500),
+        ("E001", "Desk", "North", 2500),
+        ("E003", "Chair", "East", 2000),
+        ("E004", "Laptop", "West", 6000),
+    ]
+    
+    for sp_id, product, region, revenue in sample_data:
+        dashboard.add_sale(sp_id, product, region, revenue)
+    
+    print("1. All Sales Records:")
+    for record in dashboard.retrieve_all_sales():
+        print(record)
+    
+    print("\n2. Sales Sorted by Revenue (Descending):")
+    for record in dashboard.sort_by_revenue():
+        print(record)
+    
+    print("\n3. Search Salesperson E001:")
+    for record in dashboard.search_salesperson_binary("E001"):
+        print(record)
+    
+    print("\n4. Top 5 Salespersons:")
+    for record in dashboard.get_top_5_salespersons():
+        print(record)
+    
+    print("\n5. Highest Revenue Region:")
+    print(dashboard.find_highest_revenue_region())
+    
+    print("\n6. Update Incentive Status (threshold: 10000):")
+    updated = dashboard.update_incentive_status(10000)
+    print(f"Updated {updated} records")
+    
+    print("\nIncentive Eligible Salespersons:")
+    for record in dashboard.get_incentive_eligible():
+        print(record)
+    
+    dashboard.close()

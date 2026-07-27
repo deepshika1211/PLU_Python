@@ -1,0 +1,143 @@
+import argparse
+import collections
+import sqlite3
+import sys
+
+
+def connect_db(db_path):
+    return sqlite3.connect(db_path)
+
+
+def load_restaurants(conn):
+    cursor = conn.cursor()
+    cursor.execute("SELECT id, name, location FROM Restaurant")
+    return {row[0]: {'name': row[1], 'location': row[2]} for row in cursor.fetchall()}
+
+
+def load_pending_deliveries(conn):
+    cursor = conn.cursor()
+    cursor.execute(
+        """
+        SELECT d.id, d.restaurant_id, d.order_id, o.customer_name, o.destination, o.item,
+               r.name, r.location
+        FROM Delivery d
+        JOIN Orders o ON d.order_id = o.id
+        JOIN Restaurant r ON d.restaurant_id = r.id
+        WHERE d.status = 'pending'
+        """
+    )
+    rows = cursor.fetchall()
+    deliveries = []
+    for row in rows:
+        deliveries.append({
+            'delivery_id': row[0],
+            'restaurant_id': row[1],
+            'order_id': row[2],
+            'customer_name': row[3],
+            'destination': row[4],
+            'item': row[5],
+            'restaurant_name': row[6],
+            'restaurant_location': row[7],
+        })
+    return deliveries
+
+def build_graph(deliveries):
+    graph = collections.defaultdict(list)
+    for d in deliveries:
+        r_node = f"restaurant:{d['restaurant_id']}"
+        dest_node = f"destination:{d['destination']}"
+        graph[r_node].append(dest_node)
+        graph[dest_node].append(r_node)
+    return graph
+
+def bfs_shortest_path(graph, start, goal):
+    if start == goal:
+        return [start]
+    queue = collections.deque([[start]])
+    visited = {start}
+    while queue:
+        path = queue.popleft()
+        node = path[-1]
+        for neighbor in graph.get(node, []):
+            if neighbor in visited:
+                continue
+            visited.add(neighbor)
+            new_path = path + [neighbor]
+            if neighbor == goal:
+                return new_path
+            queue.append(new_path)
+    return None
+
+def format_path(path, restaurants):
+    formatted = []
+    for node in path:
+        if node.startswith('restaurant:'):
+            rid = int(node.split(':', 1)[1])
+            name = restaurants.get(rid, {}).get('name', f'Restaurant {rid}')
+            formatted.append(f"{name} (restaurant)")
+        else:
+            formatted.append(node.split(':', 1)[1])
+    return " -> ".join(formatted)
+
+def display_delivery_routes(restaurants, deliveries, graph):
+    if not deliveries:
+        print('No pending deliveries found.')
+        return
+    for d in deliveries:
+        start_node = f"restaurant:{d['restaurant_id']}"
+        goal_node = f"destination:{d['destination']}"
+        path = bfs_shortest_path(graph, start_node, goal_node)
+        sequence = format_path(path, restaurants) if path else 'No route found'
+        print('Order ID:', d['order_id'])
+        print('  Restaurant:', d['restaurant_name'])
+        print('  Customer:', d['customer_name'])
+        print('  Item:', d['item'])
+        print('  Destination:', d['destination'])
+        print('  Route:', sequence)
+        print('')
+
+def mark_deliveries_completed(conn):
+    cursor = conn.cursor()
+    cursor.execute("UPDATE Delivery SET status = 'completed' WHERE status = 'pending'")
+    conn.commit()
+    print(f"Marked {cursor.rowcount} delivery(ies) as completed.")
+
+def main():
+    parser = argparse.ArgumentParser(description='Food delivery route optimizer using SQLite.')
+    parser.add_argument('database', help='Path to SQLite database file')
+    parser.add_argument('--complete', action='store_true', help='Mark pending deliveries completed after display')
+    args = parser.parse_args()
+
+    try:
+        conn = connect_db(args.database)
+    except sqlite3.Error as exc:
+        print('Unable to open database:', exc)
+        sys.exit(1)
+
+    try:
+        restaurants = load_restaurants(conn)
+    except sqlite3.Error as exc:
+        print('Failed to load restaurants:', exc)
+        sys.exit(1)
+
+    try:
+        deliveries = load_pending_deliveries(conn)
+    except sqlite3.Error as exc:
+        print('Failed to load pending deliveries:', exc)
+        sys.exit(1)
+
+    graph = build_graph(deliveries)
+    display_delivery_routes(restaurants, deliveries, graph)
+
+    if args.complete:
+        try:
+            mark_deliveries_completed(conn)
+        except sqlite3.Error as exc:
+            print('Failed to update delivery status:', exc)
+            sys.exit(1)
+
+    conn.close()
+
+if __name__ == '__main__':
+    main()
+    

@@ -1,0 +1,101 @@
+import sqlite3
+class Movie:
+    def __init__(self, mid, title, genre, rating, watch_count):
+        self.mid = mid
+        self.title = title
+        self.genre = genre
+        self.rating = rating
+        self.watch_count = watch_count
+
+    def display(self):
+        print("Movie ID     :", self.mid)
+        print("Title        :", self.title)
+        print("Genre        :", self.genre)
+        print("Rating       :", self.rating)
+        print("Watch Count  :", self.watch_count)
+        print("-" * 30)
+
+conn = sqlite3.connect("movies.db")
+cur = conn.cursor()
+
+cur.execute("""
+CREATE TABLE IF NOT EXISTS movies(
+    movie_id INTEGER PRIMARY KEY,
+    title TEXT,
+    genre TEXT,
+    rating REAL,
+    watch_count INTEGER
+)
+""")
+
+cur.execute("SELECT COUNT(*) FROM movies")
+count = cur.fetchone()[0]
+
+if count == 0:
+    data = [
+        (101, "Inception", "Sci-Fi", 9.2, 2500),
+        (102, "Titanic", "Romance", 8.7, 4000),
+        (103, "Avengers", "Action", 9.0, 5000),
+        (104, "Interstellar", "Sci-Fi", 9.5, 3500),
+        (105, "Joker", "Drama", 8.8, 4500),
+        (106, "The Dark Knight", "Action", 9.7, 7000),
+        (107, "Frozen", "Animation", 8.3, 3000)
+    ]
+
+    cur.executemany("INSERT INTO movies VALUES(?,?,?,?,?)", data)
+    conn.commit()
+
+cur.execute("SELECT * FROM movies")
+rows = cur.fetchall()
+
+movies = []
+
+for row in rows:
+    movies.append(Movie(*row))
+
+movies.sort(key=lambda x: x.rating, reverse=True)
+
+print("\nMovies Sorted by Rating")
+print("-" * 30)
+
+for movie in movies:
+    movie.display()
+
+movie_id = int(input("Enter Movie ID to Search: "))
+
+found = False
+
+for movie in movies:
+    if movie.mid == movie_id:
+        print("\nMovie Found")
+        movie.display()
+        found = True
+        break
+
+if not found:
+    print("Movie Not Found")
+
+print("\nTop Highest Rated Movies")
+print("-" * 30)
+
+top10 = movies[:10]
+
+for movie in top10:
+    movie.display()
+
+print("\nMost Watched Movie in Each Genre")
+print("-" * 30)
+
+genre_movies = {}
+
+for movie in movies:
+    if movie.genre not in genre_movies:
+        genre_movies[movie.genre] = movie
+    else:
+        if movie.watch_count > genre_movies[movie.genre].watch_count:
+            genre_movies[movie.genre] = movie
+
+for movie in genre_movies.values():
+    movie.display()
+
+conn.close()
